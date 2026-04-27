@@ -42,6 +42,25 @@ used for:
 analysis is intended to run on CMS Run 2 NanoAOD campaigns, with concrete campaign definitions
 imported from `cmsdb`.
 
+### `order`
+
+`order` provides the object model used to manage analysis configuration in a structured way. In
+this repository it underpins the bookkeeping of:
+
+- analyses
+- campaigns
+- datasets
+- physics processes and cross sections
+- channels
+- categories
+- variables
+- systematic shifts
+
+Within a `columnflow`-based analysis, `order` is the configuration layer that makes these entities
+explicit Python objects rather than scattered dictionaries or ad hoc config fragments. That is why
+the central analysis definition in `st_entanglement.config.analysis_st_entanglement` is built
+around an `order.Analysis` instance and derived config objects.
+
 ## Repository Scope
 
 The repository should contain:

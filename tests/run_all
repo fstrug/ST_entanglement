@@ -38,6 +38,18 @@ action() {
         cecho 32 "done"
     fi
 
+    # imports
+    cecho 35 "check dependency imports ..."
+    bash "${this_dir}/run_imports"
+    ret="$?"
+    if [ "${ret}" != "0" ]; then
+        >&2 cecho 31 "run_imports failed with exit code ${ret}"
+        [ "${mode}" = "force" ] || return "${ret}"
+        ret_global="1"
+    else
+        cecho 32 "done"
+    fi
+
     return "${ret_global}"
 }
 action "$@"

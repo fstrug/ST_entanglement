@@ -14,8 +14,7 @@ from columnflow.production.cms.mc_weight import mc_weight
 from columnflow.production.cms.muon import muon_weights
 from columnflow.reduction.util import create_collections_from_masks
 from columnflow.util import maybe_import
-from columnflow.columnar_util import EMPTY_FLOAT, Route, set_ak_column
-from columnflow.production.util import attach_coffea_behavior
+from columnflow.columnar_util import EMPTY_FLOAT, Route, attach_coffea_behavior, set_ak_column
 
 np = maybe_import("numpy")
 ak = maybe_import("awkward")
@@ -36,7 +35,7 @@ def jet_features(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
     events = set_ak_column(events, "n_jet", ak.num(events.Jet.pt, axis=1), value_type=np.int32)
 
     # attach coffea behaviour
-    events = attach_coffea_behavior(events, collections={}, **kwargs)
+    events = attach_coffea_behavior(events, collections={})
     # object padding (Note that after padding, ak.num(events.Jet.pt, axis=1) would always be >= 2)
     events = set_ak_column(events, "Jet", ak.pad_none(events.Jet, 2))
 
@@ -101,6 +100,9 @@ def example(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
     if self.dataset_inst.is_mc:
         # normalization weights
         events = self[normalization_weights](events, **kwargs)
+
+        # refresh Muon coffea behavior before evaluating muon scale factors
+        events = attach_coffea_behavior(events, collections=["Muon"])
 
         # muon weights
         events = self[muon_weights](events, **kwargs)

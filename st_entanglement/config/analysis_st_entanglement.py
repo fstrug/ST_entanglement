@@ -113,7 +113,7 @@ verify_config_processes(cfg, warn=True)
 
 # default objects, such as calibrator, selector, reducer, producer, ml model, inference model, etc
 cfg.x.default_calibrator = "example"
-cfg.x.default_selector = "example"
+cfg.x.default_selector = "preselection"
 cfg.x.default_selector_steps = []
 cfg.x.default_reducer = "cf_default"
 cfg.x.default_producer = "example"
@@ -165,7 +165,7 @@ cfg.x.custom_style_config_groups = {}
 # selector step groups for conveniently looping over certain steps
 # (used in cutflow tasks)
 cfg.x.selector_step_groups = {
-    "default": ["muon", "jet"],
+    "default": ["muon", "jet", "MET", "btag"],
 }
 
 # calibrator groups for conveniently looping over certain calibrators
@@ -203,6 +203,9 @@ cfg.x.muon_sf_names = MuonSFConfig(
     correction="NUM_TightRelIso_DEN_TightIDandIPCut",
     campaign=f"{year}_UL",
 )
+
+# 2017 UL DeepJet medium working point
+cfg.x.btag_working_point = 0.3040
 
 # register shifts
 cfg.add_shift(name="nominal", id=0)
@@ -310,29 +313,21 @@ cfg.add_variable(
     expression="event",
     binning=(1, 0.0, 1.0e9),
     x_title="Event number",
-    discrete_x=True,
 )
 cfg.add_variable(
     name="run",
     expression="run",
     binning=(1, 100000.0, 500000.0),
     x_title="Run number",
-    discrete_x=True,
 )
 cfg.add_variable(
     name="lumi",
     expression="luminosityBlock",
     binning=(1, 0.0, 5000.0),
     x_title="Luminosity block",
-    discrete_x=True,
 )
-cfg.add_variable(
-    name="n_jet",
-    expression="n_jet",
-    binning=(11, -0.5, 10.5),
-    x_title="Number of jets",
-    discrete_x=True,
-)
+
+
 # pt of all jets in every event
 cfg.add_variable(
     name="jets_pt",
@@ -364,6 +359,7 @@ cfg.add_variable(
     binning=(40, 0.0, 800.0),
     unit="GeV",
     x_title="HT",
+    aux={"inputs": ["Jet.{pt,eta,phi}"]},
 )
 # weights
 cfg.add_variable(
@@ -379,4 +375,27 @@ cfg.add_variable(
     binning=(40, 0.0, 400.0),
     unit="GeV",
     x_title=r"Jet 1 $p_{T}$",
+)
+
+##### Variables for ST entanglement analysis
+cfg.add_variable(
+    name="nMuon",
+    expression=lambda events: ak.num(events.Muon, axis=1),
+    binning=(8, -0.5, 7.5),
+    x_title="Number of muons",
+    aux={"inputs": ["Muon.pt"]},
+)
+cfg.add_variable(
+    name="n_jet",
+    expression=lambda events: ak.num(events.Jet, axis = 1),
+    binning=(11, -0.5, 10.5),
+    x_title="Number of jets",
+    aux={"inputs": ["Jet.pt"]},
+)
+cfg.add_variable(
+    name="MET_pt",
+    expression="MET.pt",
+    binning = (100,0,100),
+    unit = "GeV",
+    x_title=r"MET $p_{T}$"
 )
