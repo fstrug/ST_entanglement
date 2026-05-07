@@ -136,7 +136,9 @@ cfg.x.dataset_groups = {}
 
 # category groups for conveniently looping over certain categories
 # (used during plotting)
-cfg.x.category_groups = {}
+cfg.x.category_groups = {
+    "channels": ["1e", "1mu"],
+}
 
 # variable groups for conveniently looping over certain variables
 # (used during plotting)
@@ -165,7 +167,9 @@ cfg.x.custom_style_config_groups = {}
 # selector step groups for conveniently looping over certain steps
 # (used in cutflow tasks)
 cfg.x.selector_step_groups = {
-    "default": ["muon", "jet", "MET", "btag"],
+    "default": ["electron", "muon", "jet", "MET", "btag"],
+    "electron_channel_steps": ["electron", "jet", "MET", "btag"],
+    "muon_channel_steps": ["muon", "jet", "MET", "btag"],
 }
 
 # calibrator groups for conveniently looping over certain calibrators
@@ -206,6 +210,16 @@ cfg.x.muon_sf_names = MuonSFConfig(
 
 # 2017 UL DeepJet medium working point
 cfg.x.btag_working_point = 0.3040
+
+# lepton selection cuts used by preselection selectors
+cfg.x.electron_selection = DotDict.wrap({
+    "pt_min": 20.0,
+    "abs_eta_max": 2.1,
+})
+cfg.x.muon_selection = DotDict.wrap({
+    "pt_min": 20.0,
+    "abs_eta_max": 2.1,
+})
 
 # register shifts
 cfg.add_shift(name="nominal", id=0)
@@ -261,6 +275,7 @@ cfg.x.keep_columns = DotDict.wrap({
         ColumnCollection.MANDATORY_COFFEA,
         # object info
         "Jet.{pt,eta,phi,mass,btagDeepFlavB,hadronFlavour}",
+        "Electron.{pt,eta,phi,mass}",
         "Muon.{pt,eta,phi,mass,pfRelIso04_all}",
         "MET.{pt,phi,significance,covXX,covXY,covYY}",
         "PV.npvs",
@@ -281,8 +296,8 @@ cfg.x.keep_columns = DotDict.wrap({
 cfg.x.versions = {}
 
 # channels
-# (just one for now)
-cfg.add_channel(name="mutau", id=1)
+cfg.add_channel(name="muon", id=1)
+cfg.add_channel(name="electron", id=2)
 
 # histogramming hooks, invoked before creating plots when --hist-hook parameter set
 cfg.x.hist_hooks = {}
@@ -297,6 +312,18 @@ add_category(
     name="incl",
     selection="cat_incl",
     label="inclusive",
+)
+add_category(
+    cfg,
+    name="1e",
+    selection="cat_1e",
+    label="1 electron",
+)
+add_category(
+    cfg,
+    name="1mu",
+    selection="cat_1mu",
+    label="1 muon",
 )
 add_category(
     cfg,
@@ -386,11 +413,80 @@ cfg.add_variable(
     aux={"inputs": ["Muon.pt"]},
 )
 cfg.add_variable(
+    name="nElectron",
+    expression=lambda events: ak.num(events.Electron, axis=1),
+    binning=(8, -0.5, 7.5),
+    x_title="Number of electrons",
+    aux={"inputs": ["Electron.pt"]},
+)
+cfg.add_variable(
+    name="electron_pt",
+    expression="Electron.pt[:,0]",
+    null_value=EMPTY_FLOAT,
+    binning=(50, 0.0, 250.0),
+    unit="GeV",
+    x_title=r"Electron $p_{T}$",
+    aux={"inputs": ["Electron.{pt,eta,phi}"]},
+)
+cfg.add_variable(
+    name="electron_eta",
+    expression="Electron.eta[:,0]",
+    null_value=EMPTY_FLOAT,
+    binning=(30, -3.0, 3.0),
+    x_title=r"Electron $\eta$",
+    aux={"inputs": ["Electron.{pt,eta,phi}"]},
+)
+cfg.add_variable(
+    name="electron_phi",
+    expression="Electron.phi[:,0]",
+    null_value=EMPTY_FLOAT,
+    binning=(32, -3.2, 3.2),
+    x_title=r"Electron $\phi$",
+    aux={"inputs": ["Electron.{pt,eta,phi}"]},
+)
+cfg.add_variable(
+    name="muon_pt",
+    expression="Muon.pt[:,0]",
+    null_value=EMPTY_FLOAT,
+    binning=(50, 0.0, 250.0),
+    unit="GeV",
+    x_title=r"Muon $p_{T}$",
+    aux={"inputs": ["Muon.{pt,eta,phi}"]},
+)
+cfg.add_variable(
+    name="muon_eta",
+    expression="Muon.eta[:,0]",
+    null_value=EMPTY_FLOAT,
+    binning=(30, -3.0, 3.0),
+    x_title=r"Muon $\eta$",
+    aux={"inputs": ["Muon.{pt,eta,phi}"]},
+)
+cfg.add_variable(
+    name="muon_phi",
+    expression="Muon.phi[:,0]",
+    null_value=EMPTY_FLOAT,
+    binning=(32, -3.2, 3.2),
+    x_title=r"Muon $\phi$",
+    aux={"inputs": ["Muon.{pt,eta,phi}"]},
+)
+cfg.add_variable(
     name="n_jet",
     expression=lambda events: ak.num(events.Jet, axis = 1),
     binning=(11, -0.5, 10.5),
     x_title="Number of jets",
     aux={"inputs": ["Jet.pt"]},
+)
+cfg.add_variable(
+    name="n_bjet",
+    expression=lambda events: ak.sum(
+        (events.Jet.pt >= 25.0) &
+        (abs(events.Jet.eta) < 2.4) &
+        (events.Jet.btagDeepFlavB >= cfg.x.btag_working_point),
+        axis=1,
+    ),
+    binning=(8, -0.5, 7.5),
+    x_title="Number of b-tagged jets",
+    aux={"inputs": ["Jet.{pt,phi,eta,btagDeepFlavB}"]},
 )
 cfg.add_variable(
     name="MET_pt",

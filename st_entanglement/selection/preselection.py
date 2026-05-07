@@ -18,6 +18,45 @@ from st_entanglement.production.example import cutflow_features
 ak = maybe_import("awkward")
 
 
+def _electron_mask(self: Selector, events: ak.Array) -> ak.Array:
+    cuts = self.config_inst.x.electron_selection
+    return (
+        (events.Electron.pt >= cuts.pt_min) &
+        (abs(events.Electron.eta) < cuts.abs_eta_max)
+    )
+
+
+def _muon_mask(self: Selector, events: ak.Array) -> ak.Array:
+    cuts = self.config_inst.x.muon_selection
+    return (
+        (events.Muon.pt >= cuts.pt_min) &
+        (abs(events.Muon.eta) < cuts.abs_eta_max)
+    )
+
+
+@selector(
+    uses={"Electron.{pt,eta,phi,mass}"},
+)
+def electron_selection(
+    self: Selector,
+    events: ak.Array,
+    **kwargs,
+) -> tuple[ak.Array, SelectionResult]:
+    electron_mask = _electron_mask(self, events)
+    electron_sel = ak.sum(electron_mask, axis=1) == 1
+
+    return events, SelectionResult(
+        steps={
+            "electron": electron_sel,
+        },
+        objects={
+            "Electron": {
+                "Electron": electron_mask,
+            },
+        },
+    )
+
+
 @selector(
     uses={"Muon.{pt,eta,phi,mass}"},
 )
@@ -26,7 +65,7 @@ def muon_selection(
     events: ak.Array,
     **kwargs,
 ) -> tuple[ak.Array, SelectionResult]:
-    muon_mask = (events.Muon.pt >= 20.0) & (abs(events.Muon.eta) < 2.1)
+    muon_mask = _muon_mask(self, events)
     muon_sel = ak.sum(muon_mask, axis=1) == 1
 
     return events, SelectionResult(
@@ -34,6 +73,33 @@ def muon_selection(
             "muon": muon_sel,
         },
         objects={
+            "Muon": {
+                "Muon": muon_mask,
+            },
+        },
+    )
+
+
+@selector(
+    uses={"Electron.{pt,eta,phi,mass}", "Muon.{pt,eta,phi,mass}"},
+)
+def lepton_selection(
+    self: Selector,
+    events: ak.Array,
+    **kwargs,
+) -> tuple[ak.Array, SelectionResult]:
+    electron_mask = _electron_mask(self, events)
+    muon_mask = _muon_mask(self, events)
+    lepton_sel = (ak.sum(electron_mask, axis=1) + ak.sum(muon_mask, axis=1)) == 1
+
+    return events, SelectionResult(
+        steps={
+            "lepton": lepton_sel,
+        },
+        objects={
+            "Electron": {
+                "Electron": electron_mask,
+            },
             "Muon": {
                 "Muon": muon_mask,
             },
@@ -50,7 +116,7 @@ def jet_selection(
     **kwargs,
 ) -> tuple[ak.Array, SelectionResult]:
     jet_mask = (events.Jet.pt >= 25.0) & (abs(events.Jet.eta) < 2.4)
-    jet_sel = ak.sum(jet_mask, axis=1) >= 1
+    jet_sel = ak.sum(jet_mask, axis=1) == 2
 
     return events, SelectionResult(
         steps={
@@ -107,7 +173,7 @@ def check_for_1btag(
         (abs(events.Jet.eta) < 2.4) &
         (events.Jet.btagDeepFlavB >= btag_wp)
     )
-    has_btag_jet = ak.sum(btag_mask, axis=1) >= 1
+    has_btag_jet = ak.sum(btag_mask, axis=1) == 1
 
     return events, SelectionResult(
         steps={
@@ -127,8 +193,9 @@ def check_for_1btag_init(self: Selector) -> None:
 
 @selector(
     uses={
-        mc_weight, cutflow_features, process_ids, muon_selection, jet_selection,
-        MET_selection, check_for_1btag, increment_stats,
+        mc_weight, cutflow_features, process_ids, electron_selection, muon_selection,
+        lepton_selection,
+        jet_selection, MET_selection, check_for_1btag, increment_stats,
     },
     produces={
         mc_weight, cutflow_features, process_ids,
@@ -143,8 +210,14 @@ def preselection(
 ) -> tuple[ak.Array, SelectionResult]:
     results = SelectionResult()
 
+    events, electron_results = self[electron_selection](events, **kwargs)
+    results += electron_results
+
     events, muon_results = self[muon_selection](events, **kwargs)
     results += muon_results
+
+    events, lepton_results = self[lepton_selection](events, **kwargs)
+    results += lepton_results
 
     events, jet_results = self[jet_selection](events, **kwargs)
     results += jet_results
@@ -155,8 +228,11 @@ def preselection(
     events, btag_results = self[check_for_1btag](events, **kwargs)
     results += btag_results
 
+    results.steps["electron_channel"] = results.steps.electron & ~results.steps.muon
+    results.steps["muon_channel"] = results.steps.muon & ~results.steps.electron
+
     results.event = (
-        results.steps.muon &
+        results.steps.lepton &
         results.steps.jet &
         results.steps.MET &
         results.steps.btag
