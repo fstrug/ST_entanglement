@@ -157,6 +157,91 @@ FieldNotFoundError: no field 'cutflow'
 The meaning is simple: the variable definition asks for `cutflow.jet1_pt`, but the event record
 being read no longer contains a `cutflow` field.
 
+## Adding Cutflow Variables for Plotting
+
+Cutflow variables such as `cf_jet1_pt` or `cf_muon_pt` follow a different pattern from ordinary
+plot variables. Registering a config variable alone is not enough. The quantity must first be
+created as a produced column under the `cutflow.*` namespace.
+
+The workflow has three parts:
+
+1. Add the cutflow column in `st_entanglement/production/example.py` inside
+   `cutflow_features(...)`.
+2. Declare that column in the producer `produces={...}` set, and declare any needed input object
+   columns in `uses={...}`.
+3. Register the plotting variable in the config with `expression="cutflow.<name>"`.
+
+For example, `cf_jet1_pt` works because `cutflow_features(...)` produces the column
+`cutflow.jet1_pt`:
+
+```python
+@producer(
+    uses={mc_weight, category_ids, "Jet.{pt,phi}"},
+    produces={mc_weight, category_ids, "cutflow.jet1_pt"},
+)
+def cutflow_features(...):
+    ...
+    reduced_events = create_collections_from_masks(events, object_masks)
+    ...
+    events = set_ak_column(
+        events,
+        "cutflow.jet1_pt",
+        Route("Jet.pt[:,0]").apply(reduced_events, EMPTY_FLOAT),
+    )
+```
+
+and the config then exposes it for plotting:
+
+```python
+cfg.add_variable(
+    name="cf_jet1_pt",
+    expression="cutflow.jet1_pt",
+    ...
+)
+```
+
+The same pattern is required for additional cutflow variables. For `cf_muon_pt`, the producer must
+explicitly create `cutflow.muon_pt`:
+
+```python
+@producer(
+    uses={mc_weight, category_ids, "Jet.{pt,phi}", "Muon.{pt,eta,phi}"},
+    produces={mc_weight, category_ids, "cutflow.jet1_pt", "cutflow.muon_pt"},
+)
+def cutflow_features(...):
+    ...
+    reduced_events = create_collections_from_masks(events, object_masks)
+    ...
+    events = set_ak_column(
+        events,
+        "cutflow.muon_pt",
+        Route("Muon.pt[:,0]").apply(reduced_events, EMPTY_FLOAT),
+    )
+```
+
+and only then will a config variable such as
+
+```python
+cfg.add_variable(
+    name="cf_muon_pt",
+    expression="cutflow.muon_pt",
+    ...
+)
+```
+
+work reliably.
+
+Two details matter in practice:
+
+- Read from `reduced_events` rather than the unreduced `events` object when the quantity should
+  follow the selected/masked collections from the selector.
+- Keep the producer `uses` and `produces` declarations synchronized with the new cutflow column.
+  If the config variable exists but the producer never created `cutflow.<name>`, plotting tasks can
+  fail because the `cutflow` field is missing.
+
+In short: for cutflow plotting variables, always add both the producer-side `cutflow.<name>` column
+and the config-side `cfg.add_variable(...)` entry.
+
 
 ## Practical Rule
 
