@@ -25,6 +25,15 @@ set_ak_f32 = partial(set_ak_column, value_type=np.float32)
 
 
 @producer(
+    uses=set(),
+    produces=set(),
+    exposed=True,
+)
+def identity(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
+    return events
+
+
+@producer(
     uses={"Jet.{pt,eta,phi,mass}"},
     produces={"ht", "n_jet", "dijet.{pt,mass,dr}"},
 )
@@ -50,8 +59,8 @@ def jet_features(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
 
 
 @producer(
-    uses={mc_weight, category_ids, "Jet.{pt,phi}"},
-    produces={mc_weight, category_ids, "cutflow.jet1_pt"},
+    uses={mc_weight, category_ids, "Jet.{pt,phi}", "Muon.{pt,eta,phi}"},
+    produces={mc_weight, category_ids, "cutflow.jet1_pt", "cutflow.muon_pt"},
 )
 def cutflow_features(
     self: Producer,
@@ -72,7 +81,12 @@ def cutflow_features(
     events = set_ak_column(
         events,
         "cutflow.jet1_pt",
-        Route("Jet.pt[:,0]").apply(events, EMPTY_FLOAT),
+        Route("Jet.pt[:,0]").apply(reduced_events, EMPTY_FLOAT),
+    )
+    events = set_ak_column(
+        events,
+        "cutflow.muon_pt",
+        Route("Muon.pt[:,0]").apply(reduced_events, EMPTY_FLOAT),
     )
 
     return events

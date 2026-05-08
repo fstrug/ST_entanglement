@@ -14,6 +14,15 @@ ak = maybe_import("awkward")
 
 
 @calibrator(
+    uses=set(),
+    produces=set(),
+    exposed=True,
+)
+def identity(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
+    return events
+
+
+@calibrator(
     uses={deterministic_seeds, "Jet.{pt,eta,phi,mass}"},
     produces={deterministic_seeds, "Jet.{pt,mass}{,_jec_up,_jec_down}"},
 )
