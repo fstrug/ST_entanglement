@@ -142,7 +142,14 @@ cfg.x.category_groups = {
 
 # variable groups for conveniently looping over certain variables
 # (used during plotting)
-cfg.x.variable_groups = {}
+cfg.x.variable_groups = {
+    "n_particles": ("n_jet", "n_bjet", "nMuon", "nElectron"),
+    "jet1_kin": ("jet1_pt", "jet1_eta", "jet1_phi"),
+    "jet2_kin": ("jet2_pt", "jet2_eta", "jet2_phi"),
+    "muon_kin": ("muon_pt", "muon_eta", "muon_phi"),
+    "electron_kin": ("electron_pt", "electron_eta", "electron_phi"),
+    "MET_kin": ("MET_pt",),
+}
 
 # shift groups for conveniently looping over certain shifts
 # (used during plotting)
@@ -213,12 +220,20 @@ cfg.x.btag_working_point = 0.3040
 
 # lepton selection cuts used by preselection selectors
 cfg.x.electron_selection = DotDict.wrap({
-    "pt_min": 20.0,
+    "pt_min": 27.0,
     "abs_eta_max": 2.1,
 })
 cfg.x.muon_selection = DotDict.wrap({
-    "pt_min": 20.0,
+    "pt_min": 24.0,
     "abs_eta_max": 2.1,
+})
+cfg.x.btag_selection = DotDict.wrap({
+    "pt_min": 25.0,
+    "abs_eta_max": 2.4,
+    "n_btag": 1,
+})
+cfg.x.met_selection = DotDict.wrap({
+    "pt_min": 30.0,
 })
 
 # register shifts
@@ -381,6 +396,35 @@ cfg.add_variable(
     x_title=r"Jet 1 $\eta$",
 )
 cfg.add_variable(
+    name="jet1_phi",
+    expression="Jet.phi[:,0]",
+    null_value=EMPTY_FLOAT,
+    binning=(32, -3.2, 3.2),
+    x_title=r"Jet 1 $\phi$",
+)
+cfg.add_variable(
+    name="jet2_pt",
+    expression="Jet.pt[:,1]",
+    null_value=EMPTY_FLOAT,
+    binning=(40, 0.0, 400.0),
+    unit="GeV",
+    x_title=r"Jet 2 $p_{T}$",
+)
+cfg.add_variable(
+    name="jet2_eta",
+    expression="Jet.eta[:,1]",
+    null_value=EMPTY_FLOAT,
+    binning=(30, -3.0, 3.0),
+    x_title=r"Jet 2 $\eta$",
+)
+cfg.add_variable(
+    name="jet2_phi",
+    expression="Jet.phi[:,1]",
+    null_value=EMPTY_FLOAT,
+    binning=(32, -3.2, 3.2),
+    x_title=r"Jet 2 $\phi$",
+)
+cfg.add_variable(
     name="ht",
     expression=lambda events: ak.sum(events.Jet.pt, axis=1),
     binning=(40, 0.0, 800.0),
@@ -402,6 +446,14 @@ cfg.add_variable(
     binning=(40, 0.0, 400.0),
     unit="GeV",
     x_title=r"Jet 1 $p_{T}$",
+)
+
+cfg.add_variable(
+    name="cf_muon_pt",
+    expression="cutflow.muon_pt",
+    binning=(50,0.0,250.0),
+    unit="GeV",
+    x_title=r"Muon $p_{T}$",
 )
 
 ##### Variables for ST entanglement analysis

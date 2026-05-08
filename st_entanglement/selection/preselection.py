@@ -150,7 +150,7 @@ def MET_selection(
     events: ak.Array,
     **kwargs,
 ) -> tuple[ak.Array, SelectionResult]:
-    met_sel = events.MET.pt >= 20.0
+    met_sel = events.MET.pt >= self.config_inst.x.met_selection.pt_min
 
     return events, SelectionResult(
         steps={
@@ -167,13 +167,14 @@ def check_for_1btag(
     events: ak.Array,
     **kwargs,
 ) -> tuple[ak.Array, SelectionResult]:
+    cuts = self.config_inst.x.btag_selection
     btag_wp = self.config_inst.x.btag_working_point
     btag_mask = (
-        (events.Jet.pt >= 25.0) &
-        (abs(events.Jet.eta) < 2.4) &
+        (events.Jet.pt >= cuts.pt_min) &
+        (abs(events.Jet.eta) < cuts.abs_eta_max) &
         (events.Jet.btagDeepFlavB >= btag_wp)
     )
-    has_btag_jet = ak.sum(btag_mask, axis=1) == 1
+    has_btag_jet = ak.sum(btag_mask, axis=1) == cuts.n_btag
 
     return events, SelectionResult(
         steps={
