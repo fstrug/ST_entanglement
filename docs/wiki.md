@@ -18,6 +18,7 @@ conventions can evolve independently.
 - [Entry 4: Jet Energy Corrections and Resolution](./wiki/jet-energy-corrections-and-resolution.md)
 - [Entry 5: Luminosity Corrections](./wiki/luminosity-corrections.md)
 - [Entry 6: ColumnFlow Notes](./wiki/columnflow-notes.md)
+- [Entry 7: Plot Normalization Notes](./wiki/plot-normalization-notes.md)
 
 ## Planned Topics
 

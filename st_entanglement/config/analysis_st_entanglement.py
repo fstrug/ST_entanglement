@@ -9,12 +9,13 @@ import order as od
 from scinum import Number
 
 from columnflow.config_util import (
-    get_root_processes_from_campaign, add_shift_aliases, add_category, verify_config_processes,
+    get_root_processes_from_campaign, add_shift_aliases, get_shifts_from_sources, add_category, verify_config_processes,
 )
 from columnflow.columnar_util import EMPTY_FLOAT, ColumnCollection, skip_column
 from columnflow.util import DotDict, maybe_import
 
 ak = maybe_import("awkward")
+np = maybe_import("numpy")
 
 
 #
@@ -79,26 +80,73 @@ year = campaign.x.year
 
 # add processes we are interested in
 process_names = [
+    # Data
     "data",
+    # Signal
+    "st_tchannel",
+    # Major Backgrounds
+    "w_lnu",
+    "qcd",
     "tt",
-    "st",
+    # Minor Backgrounds
+    "dy",
+    "st_twchannel"
 ]
 for process_name in process_names:
     # add the process
     proc = cfg.add_process(procs.get(process_name))
 
     # configuration of colors, labels, etc. can happen here
-    if proc.is_mc:
-        proc.color1 = (244, 182, 66) if proc.name == "tt" else (244, 93, 66)
+    if proc.name == "data":
+        proc.color1 = (0, 0, 0)
+    elif proc.name == "tt":
+        proc.color1 = (244, 182, 66)
+    elif proc.name == "st":
+        proc.color1 = (244, 93, 66)
+    elif proc.name == "st_tchannel_t":
+        proc.color1 = (244, 93, 66)
+    elif proc.name == "st_tchannel_tbar":
+        proc.color1 = (66, 135, 244)
+    elif proc.name == "w_lnu":
+        proc.color1 = (86, 180, 233)
+    elif proc.name == "qcd":
+        proc.color1 = (148, 103, 189)
+    elif proc.name == "dy":
+        proc.color1 = (44, 160, 44)
+    elif proc.name == "st_twchannel":
+        proc.color1 = (214, 39, 40)
 
 # add datasets we need to study
 dataset_names = [
     # data
     "data_mu_b",
-    # backgrounds
-    "tt_sl_powheg",
     # signals
-    "st_tchannel_t_4f_powheg",
+    "st_tchannel_t_5f_powheg",
+    "st_tchannel_tbar_5f_powheg",
+    ### Major backgrounds
+    # ttbar
+    "tt_sl_powheg",
+    # QCD
+    "qcd_ht50to100_madgraph",
+    "qcd_ht100to200_madgraph",
+    "qcd_ht200to300_madgraph",
+    "qcd_ht300to500_madgraph",
+    "qcd_ht500to700_madgraph",
+    "qcd_ht700to1000_madgraph",
+    "qcd_ht1000to1500_madgraph",
+    "qcd_ht1500to2000_madgraph",
+    "qcd_ht2000toinf_madgraph",
+    # Wlnu
+    "w_lnu_madgraph",
+    ### Minor backgrounds
+    # dy
+    "dy_m50toinf_1j_madgraph",
+    "dy_m50toinf_2j_madgraph",
+    "dy_m50toinf_3j_madgraph",
+    "dy_m50toinf_4j_madgraph",
+    # tW
+    "st_twchannel_t_powheg",
+    "st_twchannel_tbar_powheg",
 ]
 for dataset_name in dataset_names:
     # add the dataset
@@ -126,6 +174,8 @@ cfg.x.default_variables = ("n_jet", "jet1_pt")
 # process groups for conveniently looping over certain processs
 # (used in wrapper_factory and during plotting)
 cfg.x.process_groups = {
+    "st_grouped": ["tt", "st"],
+    "st_split": ["st_tchannel_t", "st_tchannel_tbar"],
     "signals": [],  # list of signal parent processes e.g. h, hh etc. (needed for some features)
     "other_groups": [],
 }
@@ -146,9 +196,11 @@ cfg.x.variable_groups = {
     "n_particles": ("n_jet", "n_bjet", "nMuon", "nElectron"),
     "jet1_kin": ("jet1_pt", "jet1_eta", "jet1_phi"),
     "jet2_kin": ("jet2_pt", "jet2_eta", "jet2_phi"),
+    "lepton_kin": ("Lepton_pt", "Lepton_eta", "Lepton_phi", "Lepton_mass"),
+    "bjet_kin": ("Bjet_pt", "Bjet_eta", "Bjet_phi", "Bjet_mass", "Bjet_btagDeepFlavB"),
     "muon_kin": ("muon_pt", "muon_eta", "muon_phi"),
     "electron_kin": ("electron_pt", "electron_eta", "electron_phi"),
-    "MET_kin": ("MET_pt",),
+    "MET_kin": ("MET_pt","MET_phi"),
 }
 
 # shift groups for conveniently looping over certain shifts
@@ -174,9 +226,9 @@ cfg.x.custom_style_config_groups = {}
 # selector step groups for conveniently looping over certain steps
 # (used in cutflow tasks)
 cfg.x.selector_step_groups = {
-    "default": ["electron", "muon", "jet", "MET", "btag"],
+    "default": ["electron", "muon", "trigger", "jet", "MET", "btag"],
     "electron_channel_steps": ["electron", "jet", "MET", "btag"],
-    "muon_channel_steps": ["muon", "jet", "MET", "btag"],
+    "muon_channel_steps": ["muon", "trigger", "jet", "MET", "btag"],
 }
 
 # calibrator groups for conveniently looping over certain calibrators
@@ -227,9 +279,13 @@ cfg.x.muon_selection = DotDict.wrap({
     "pt_min": 24.0,
     "abs_eta_max": 2.1,
 })
+cfg.x.trigger_names = (
+    "IsoMu24",
+    "IsoMu24_eta2p1",
+)
 cfg.x.btag_selection = DotDict.wrap({
     "pt_min": 25.0,
-    "abs_eta_max": 2.4,
+    "abs_eta_max": 4.1,
     "n_btag": 1,
 })
 cfg.x.met_selection = DotDict.wrap({
@@ -266,6 +322,8 @@ cfg.add_shift(name="mu_down", id=11, type="shape")
 # add column aliases for shift mu
 add_shift_aliases(cfg, "mu", {"muon_weight": "muon_weight_{direction}"})
 
+
+
 # external files
 json_mirror = "/afs/cern.ch/work/m/mrieger/public/mirrors/jsonpog-integration-377439e8"
 cfg.x.external_files = DotDict.wrap({
@@ -278,6 +336,12 @@ cfg.x.external_files = DotDict.wrap({
     # muon scale factors
     "muon_sf": (f"{json_mirror}/POG/MUO/{year}_UL/muon_Z.json.gz", "v1"),
 })
+
+#### Weights
+cfg.x.event_weights = {
+            "normalization_weight": [],
+            "muon_weight": get_shifts_from_sources(cfg, "mu_sf"),
+        }
 
 # target file size after MergeReducedEvents in MB
 cfg.x.reduced_file_size = 512.0
@@ -392,14 +456,14 @@ cfg.add_variable(
     name="jet1_eta",
     expression="Jet.eta[:,0]",
     null_value=EMPTY_FLOAT,
-    binning=(30, -3.0, 3.0),
+    binning=(41, -4.1, 4.1),
     x_title=r"Jet 1 $\eta$",
 )
 cfg.add_variable(
     name="jet1_phi",
     expression="Jet.phi[:,0]",
     null_value=EMPTY_FLOAT,
-    binning=(32, -3.2, 3.2),
+    binning=(32, -np.pi, np.pi),
     x_title=r"Jet 1 $\phi$",
 )
 cfg.add_variable(
@@ -414,14 +478,14 @@ cfg.add_variable(
     name="jet2_eta",
     expression="Jet.eta[:,1]",
     null_value=EMPTY_FLOAT,
-    binning=(30, -3.0, 3.0),
+    binning=(41, -4.1, 4.1),
     x_title=r"Jet 2 $\eta$",
 )
 cfg.add_variable(
     name="jet2_phi",
     expression="Jet.phi[:,1]",
     null_value=EMPTY_FLOAT,
-    binning=(32, -3.2, 3.2),
+    binning=(32, -np.pi, np.pi),
     x_title=r"Jet 2 $\phi$",
 )
 cfg.add_variable(
@@ -492,7 +556,7 @@ cfg.add_variable(
     name="electron_phi",
     expression="Electron.phi[:,0]",
     null_value=EMPTY_FLOAT,
-    binning=(32, -3.2, 3.2),
+    binning=(32, -np.pi, np.pi),
     x_title=r"Electron $\phi$",
     aux={"inputs": ["Electron.{pt,eta,phi}"]},
 )
@@ -517,9 +581,85 @@ cfg.add_variable(
     name="muon_phi",
     expression="Muon.phi[:,0]",
     null_value=EMPTY_FLOAT,
-    binning=(32, -3.2, 3.2),
+    binning=(32, -np.pi, np.pi),
     x_title=r"Muon $\phi$",
     aux={"inputs": ["Muon.{pt,eta,phi}"]},
+)
+cfg.add_variable(
+    name="Lepton_pt",
+    expression="Lepton.pt",
+    null_value=EMPTY_FLOAT,
+    binning=(50, 0.0, 250.0),
+    unit="GeV",
+    x_title=r"Selected lepton $p_{T}$",
+    aux={"inputs": ["Lepton.{pt,eta,phi,mass}"]},
+)
+cfg.add_variable(
+    name="Lepton_eta",
+    expression="Lepton.eta",
+    null_value=EMPTY_FLOAT,
+    binning=(30, -3.0, 3.0),
+    x_title=r"Selected lepton $\eta$",
+    aux={"inputs": ["Lepton.{pt,eta,phi,mass}"]},
+)
+cfg.add_variable(
+    name="Lepton_phi",
+    expression="Lepton.phi",
+    null_value=EMPTY_FLOAT,
+    binning=(32, -np.pi, np.pi),
+    x_title=r"Selected lepton $\phi$",
+    aux={"inputs": ["Lepton.{pt,eta,phi,mass}"]},
+)
+cfg.add_variable(
+    name="Lepton_mass",
+    expression="Lepton.mass",
+    null_value=EMPTY_FLOAT,
+    binning=(50, 0.0, 200.0),
+    unit="GeV",
+    x_title=r"Selected lepton mass",
+    aux={"inputs": ["Lepton.{pt,eta,phi,mass}"]},
+)
+cfg.add_variable(
+    name="Bjet_pt",
+    expression="Bjet.pt",
+    null_value=EMPTY_FLOAT,
+    binning=(50, 0.0, 250.0),
+    unit="GeV",
+    x_title=r"Selected b jet $p_{T}$",
+    aux={"inputs": ["Bjet.{pt,eta,phi,mass,btagDeepFlavB}"]},
+)
+cfg.add_variable(
+    name="Bjet_eta",
+    expression="Bjet.eta",
+    null_value=EMPTY_FLOAT,
+    binning=(41, -4.1, 4.1),
+    x_title=r"Selected b jet $\eta$",
+    aux={"inputs": ["Bjet.{pt,eta,phi,mass,btagDeepFlavB}"]},
+)
+cfg.add_variable(
+    name="Bjet_phi",
+    expression="Bjet.phi",
+    null_value=EMPTY_FLOAT,
+    binning=(32, -np.pi, np.pi),
+    x_title=r"Selected b jet $\phi$",
+    aux={"inputs": ["Bjet.{pt,eta,phi,mass,btagDeepFlavB}"]},
+)
+cfg.add_variable(
+    name="Bjet_mass",
+    expression="Bjet.mass",
+    null_value=EMPTY_FLOAT,
+    binning=(50, 0.0, 200.0),
+    unit="GeV",
+    x_title=r"Selected b jet mass",
+    aux={"inputs": ["Bjet.{pt,eta,phi,mass,btagDeepFlavB}"]},
+)
+cfg.add_variable(
+    name="Bjet_btagDeepFlavB",
+    expression="Bjet.btagDeepFlavB",
+    null_value=EMPTY_FLOAT,
+    binning=(50, 0.0, 1.0),
+    x_title=r"Selected b jet DeepFlavB",
+    aux={"inputs": ["Bjet.{pt,eta,phi,mass,btagDeepFlavB}"]},
 )
 cfg.add_variable(
     name="n_jet",
@@ -532,7 +672,7 @@ cfg.add_variable(
     name="n_bjet",
     expression=lambda events: ak.sum(
         (events.Jet.pt >= 25.0) &
-        (abs(events.Jet.eta) < 2.4) &
+        (abs(events.Jet.eta) < 4.1) &
         (events.Jet.btagDeepFlavB >= cfg.x.btag_working_point),
         axis=1,
     ),

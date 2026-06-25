@@ -1,4 +1,5 @@
 # coding: utf-8
+# hello world
 
 """
 Preselection methods for the ST entanglement analysis.
@@ -115,8 +116,8 @@ def jet_selection(
     events: ak.Array,
     **kwargs,
 ) -> tuple[ak.Array, SelectionResult]:
-    jet_mask = (events.Jet.pt >= 25.0) & (abs(events.Jet.eta) < 2.4)
-    jet_sel = ak.sum(jet_mask, axis=1) == 2
+    jet_mask = (events.Jet.pt >= 25.0) & (abs(events.Jet.eta) < 4.1)
+    jet_sel = ak.sum(jet_mask, axis=1) >= 2
 
     return events, SelectionResult(
         steps={
@@ -139,6 +140,35 @@ def jet_selection_init(self: Selector) -> None:
         shift_inst.name
         for shift_inst in self.config_inst.shifts
         if shift_inst.has_tag(("jec", "jer"))
+    }
+
+
+@selector()
+def trigger_selection(
+    self: Selector,
+    events: ak.Array,
+    **kwargs,
+) -> tuple[ak.Array, SelectionResult]:
+    trigger_names = tuple(self.config_inst.x.trigger_names)
+    if not trigger_names:
+        raise ValueError("no HLT triggers configured in cfg.x.trigger_names")
+
+    trigger_sel = events.HLT[trigger_names[0]]
+    for trigger_name in trigger_names[1:]:
+        trigger_sel = trigger_sel | events.HLT[trigger_name]
+
+    return events, SelectionResult(
+        steps={
+            "trigger": trigger_sel,
+        },
+    )
+
+
+@trigger_selection.init
+def trigger_selection_init(self: Selector) -> None:
+    self.uses |= {
+        f"HLT.{trigger_name}"
+        for trigger_name in self.config_inst.x.trigger_names
     }
 
 
@@ -196,7 +226,7 @@ def check_for_1btag_init(self: Selector) -> None:
     uses={
         mc_weight, cutflow_features, process_ids, electron_selection, muon_selection,
         lepton_selection,
-        jet_selection, MET_selection, check_for_1btag, increment_stats,
+        trigger_selection, jet_selection, MET_selection, check_for_1btag, increment_stats,
     },
     produces={
         mc_weight, cutflow_features, process_ids,
@@ -211,11 +241,8 @@ def preselection(
 ) -> tuple[ak.Array, SelectionResult]:
     results = SelectionResult()
 
-    events, electron_results = self[electron_selection](events, **kwargs)
-    results += electron_results
-
-    events, muon_results = self[muon_selection](events, **kwargs)
-    results += muon_results
+    events, trigger_results = self[trigger_selection](events, **kwargs)
+    results += trigger_results
 
     events, lepton_results = self[lepton_selection](events, **kwargs)
     results += lepton_results
@@ -229,10 +256,8 @@ def preselection(
     events, btag_results = self[check_for_1btag](events, **kwargs)
     results += btag_results
 
-    results.steps["electron_channel"] = results.steps.electron & ~results.steps.muon
-    results.steps["muon_channel"] = results.steps.muon & ~results.steps.electron
-
     results.event = (
+        results.steps.trigger &
         results.steps.lepton &
         results.steps.jet &
         results.steps.MET &

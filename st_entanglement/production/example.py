@@ -59,6 +59,48 @@ def jet_features(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
 
 
 @producer(
+    uses={"Electron.{pt,eta,phi,mass}", "Muon.{pt,eta,phi,mass}"},
+    produces={"Lepton.{pt,eta,phi,mass}"},
+)
+def lepton_kinematics(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
+    # At this stage, the event is assumed to contain exactly one selected electron or muon.
+    electron = ak.pad_none(events.Electron, 1)[:, 0]
+    muon = ak.pad_none(events.Muon, 1)[:, 0]
+    has_electron = ak.num(events.Electron, axis=1) == 1
+
+    events = set_ak_f32(events, "Lepton.pt", ak.where(has_electron, electron.pt, muon.pt))
+    events = set_ak_f32(events, "Lepton.eta", ak.where(has_electron, electron.eta, muon.eta))
+    events = set_ak_f32(events, "Lepton.phi", ak.where(has_electron, electron.phi, muon.phi))
+    events = set_ak_f32(events, "Lepton.mass", ak.where(has_electron, electron.mass, muon.mass))
+
+    return events
+
+
+@producer(
+    uses={"Jet.{pt,eta,phi,mass,btagDeepFlavB}"},
+    produces={"Bjet.{pt,eta,phi,mass,btagDeepFlavB}"},
+)
+def bjet_kinematics(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
+    # At this stage, the event is assumed to contain exactly one selected b-tagged jet.
+    cuts = self.config_inst.x.btag_selection
+    btag_wp = self.config_inst.x.btag_working_point
+    btag_mask = (
+        (events.Jet.pt >= cuts.pt_min) &
+        (abs(events.Jet.eta) < cuts.abs_eta_max) &
+        (events.Jet.btagDeepFlavB >= btag_wp)
+    )
+    bjet = ak.pad_none(events.Jet[btag_mask], 1)[:, 0]
+
+    events = set_ak_f32(events, "Bjet.pt", bjet.pt)
+    events = set_ak_f32(events, "Bjet.eta", bjet.eta)
+    events = set_ak_f32(events, "Bjet.phi", bjet.phi)
+    events = set_ak_f32(events, "Bjet.mass", bjet.mass)
+    events = set_ak_f32(events, "Bjet.btagDeepFlavB", bjet.btagDeepFlavB)
+
+    return events
+
+
+@producer(
     uses={mc_weight, category_ids, "Jet.{pt,phi}", "Muon.{pt,eta,phi}"},
     produces={mc_weight, category_ids, "cutflow.jet1_pt", "cutflow.muon_pt"},
 )
@@ -94,15 +136,23 @@ def cutflow_features(
 
 @producer(
     uses={
-        jet_features, category_ids, normalization_weights, muon_weights, deterministic_seeds,
+        jet_features, lepton_kinematics, bjet_kinematics, category_ids,
+        normalization_weights, muon_weights, deterministic_seeds,
     },
     produces={
-        jet_features, category_ids, normalization_weights, muon_weights, deterministic_seeds,
+        jet_features, lepton_kinematics, bjet_kinematics, category_ids,
+        normalization_weights, muon_weights, deterministic_seeds,
     },
 )
 def example(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
     # jet_features
     events = self[jet_features](events, **kwargs)
+
+    # selected lepton kinematics
+    events = self[lepton_kinematics](events, **kwargs)
+
+    # selected b-jet kinematics and discriminator
+    events = self[bjet_kinematics](events, **kwargs)
 
     # category ids
     events = self[category_ids](events, **kwargs)
