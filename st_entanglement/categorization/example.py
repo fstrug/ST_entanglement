@@ -35,4 +35,4 @@ def cat_1mu(self: Categorizer, events: ak.Array, **kwargs) -> tuple[ak.Array, ak
 @categorizer(uses={"Jet.pt"})
 def cat_2j(self: Categorizer, events: ak.Array, **kwargs) -> tuple[ak.Array, ak.Array]:
     # two or more jets
-    return events, ak.num(events.Jet.pt, axis=1) == 2
+    return events, ak.num(events.Jet.pt, axis=1) >= 2
