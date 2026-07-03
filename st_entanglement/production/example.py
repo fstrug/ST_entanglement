@@ -15,6 +15,7 @@ from columnflow.production.cms.muon import muon_weights
 from columnflow.reduction.util import create_collections_from_masks
 from columnflow.util import maybe_import
 from columnflow.columnar_util import EMPTY_FLOAT, Route, attach_coffea_behavior, set_ak_column
+from st_entanglement.production.weights import weights
 
 np = maybe_import("numpy")
 ak = maybe_import("awkward")
@@ -137,11 +138,11 @@ def cutflow_features(
 @producer(
     uses={
         jet_features, lepton_kinematics, bjet_kinematics, category_ids,
-        normalization_weights, muon_weights, deterministic_seeds,
+        normalization_weights, muon_weights, deterministic_seeds, weights,
     },
     produces={
         jet_features, lepton_kinematics, bjet_kinematics, category_ids,
-        normalization_weights, muon_weights, deterministic_seeds,
+        normalization_weights, muon_weights, deterministic_seeds, weights,
     },
 )
 def example(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
@@ -160,15 +161,7 @@ def example(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
     # deterministic seeds
     events = self[deterministic_seeds](events, **kwargs)
 
-    # mc-only weights
-    if self.dataset_inst.is_mc:
-        # normalization weights
-        events = self[normalization_weights](events, **kwargs)
-
-        # refresh Muon coffea behavior before evaluating muon scale factors
-        events = attach_coffea_behavior(events, collections=["Muon"])
-
-        # muon weights
-        events = self[muon_weights](events, **kwargs)
+    # weights
+    events = self[weights](events, **kwargs)
 
     return events
